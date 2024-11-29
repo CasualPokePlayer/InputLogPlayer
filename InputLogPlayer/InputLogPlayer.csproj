@@ -1,0 +1,105 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<LangVersion>12.0</LangVersion>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<Nullable>disable</Nullable>
+		<OutputType>Exe</OutputType>
+		<OutputPath>$(ProjectDir)../output</OutputPath>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+	</PropertyGroup>
+	<PropertyGroup>
+		<Platforms>x64;ARM64</Platforms>
+		<RuntimeIdentifiers Condition="'$(RuntimeIdentifier)' == ''">win-x64;win-arm64;osx-x64;osx-arm64;linux-x64;linux-arm64</RuntimeIdentifiers>
+		<AnalysisLevel>8</AnalysisLevel>
+		<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+		<Features>strict</Features>
+		<PublishTrimmed>true</PublishTrimmed>
+		<TrimMode>full</TrimMode>
+		<SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
+		<ILLinkTreatWarningsAsErrors>true</ILLinkTreatWarningsAsErrors>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<IsAotCompatible>true</IsAotCompatible>
+		<PublishAot>true</PublishAot>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+		<PackageReference Include="ZstdSharp.Port" Version="0.8.3" />
+	</ItemGroup>
+	<PropertyGroup>
+		<GSE_PUBLISH Condition="'$(_IsPublishing)' == 'true'">true</GSE_PUBLISH>
+		<IsWindowsHost>$([MSBuild]::IsOSPlatform('Windows'))</IsWindowsHost>
+		<IsOSXHost>$([MSBuild]::IsOSPlatform('OSX'))</IsOSXHost>
+		<IsLinuxHost>$([MSBuild]::IsOSPlatform('Linux'))</IsLinuxHost>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(GSE_PUBLISH)' == 'true'">
+		<!-- Use RID to compute the OS if we're publishing -->
+		<GSE_WINDOWS>$(RuntimeIdentifier.ToLowerInvariant().StartsWith('win-'))</GSE_WINDOWS>
+		<GSE_OSX>$(RuntimeIdentifier.ToLowerInvariant().StartsWith('osx-'))</GSE_OSX>
+		<GSE_LINUX>$(RuntimeIdentifier.ToLowerInvariant().StartsWith('linux-'))</GSE_LINUX>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(GSE_PUBLISH)' != 'true'">
+		<!-- Make sure we compute the correct platform if we're not publishing (i.e. local build) -->
+		<GSE_WINDOWS>$(IsWindowsHost)</GSE_WINDOWS>
+		<GSE_OSX>$(IsOSXHost)</GSE_OSX>
+		<GSE_LINUX>$(IsLinuxHost)</GSE_LINUX>
+	</PropertyGroup>
+	<PropertyGroup>
+		<!-- Try to use RID to identify the target architecture -->
+		<GSE_X64>$(RuntimeIdentifier.ToLowerInvariant().EndsWith('-x64'))</GSE_X64>
+		<GSE_ARM64>$(RuntimeIdentifier.ToLowerInvariant().EndsWith('-arm64'))</GSE_ARM64>
+		<!-- Use the selected platform otherwise -->
+		<GSE_X64 Condition="'$(RuntimeIdentifier)' == '' And '$(Platform)' == 'x64'">true</GSE_X64>
+		<GSE_ARM64 Condition="'$(RuntimeIdentifier)' == '' And '$(Platform)' == 'ARM64'">true</GSE_ARM64>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(GSE_X64)' == 'true' Or '$(GSE_ARM64)' == 'true'">
+		<PlatformTarget Condition="'$(GSE_X64)' == 'true'">x64</PlatformTarget>
+		<PlatformTarget Condition="'$(GSE_ARM64)' == 'true'">ARM64</PlatformTarget>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(GSE_PUBLISH)' == 'true'">
+		<DebugSymbols>False</DebugSymbols>
+		<DebugType>None</DebugType>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(GSE_WINDOWS)' == 'true'">
+		<GSE_LIB_PREFIX></GSE_LIB_PREFIX>
+		<GSE_LIB_EXT>.dll</GSE_LIB_EXT>
+		<GSE_RID Condition="'$(GSE_X64)' == 'true'">win-x64</GSE_RID>
+		<GSE_RID Condition="'$(GSE_ARM64)' == 'true'">win-arm64</GSE_RID>
+		<ApplicationManifest>app.manifest</ApplicationManifest>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(GSE_OSX)' == 'true'">
+		<GSE_LIB_PREFIX>lib</GSE_LIB_PREFIX>
+		<GSE_LIB_EXT>.dylib</GSE_LIB_EXT>
+		<GSE_RID Condition="'$(GSE_X64)' == 'true'">osx-x64</GSE_RID>
+		<GSE_RID Condition="'$(GSE_ARM64)' == 'true'">osx-arm64</GSE_RID>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(GSE_LINUX)' == 'true'">
+		<GSE_LIB_PREFIX>lib</GSE_LIB_PREFIX>
+		<GSE_LIB_EXT>.so</GSE_LIB_EXT>
+		<GSE_RID Condition="'$(GSE_X64)' == 'true'">linux-x64</GSE_RID>
+		<GSE_RID Condition="'$(GSE_ARM64)' == 'true'">linux-arm64</GSE_RID>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(GSE_PUBLISH)' == 'true' And '$(GSE_LINUX)' == 'true'">
+		<!-- For some platforms, we need to dynamically link the standard C++ library -->
+		<LinkStandardCPlusPlusLibrary>true</LinkStandardCPlusPlusLibrary>
+	</PropertyGroup>
+	<PropertyGroup>
+		<SDL2_PATH>$(ProjectDir)../GSE/externals/runtimes/$(GSE_RID)/$(GSE_LIB_PREFIX)SDL2$(GSE_LIB_EXT)</SDL2_PATH>
+		<GAMBATTE_PATH>$(ProjectDir)../GSE/externals/runtimes/$(GSE_RID)/$(GSE_LIB_PREFIX)gambatte$(GSE_LIB_EXT)</GAMBATTE_PATH>
+		<MGBA_PATH>$(ProjectDir)../GSE/externals/runtimes/$(GSE_RID)/$(GSE_LIB_PREFIX)mgba$(GSE_LIB_EXT)</MGBA_PATH>
+	</PropertyGroup>
+	<ItemGroup>
+		<Content Include="$(SDL2_PATH)">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<Visible>false</Visible>
+		</Content>
+		<Content Include="$(GAMBATTE_PATH)">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<Visible>false</Visible>
+		</Content>
+		<Content Include="$(MGBA_PATH)">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<Visible>false</Visible>
+		</Content>
+	</ItemGroup>
+</Project>

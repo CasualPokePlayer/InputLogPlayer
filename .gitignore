@@ -1,0 +1,12 @@
+**/.vs/**
+**/.vscode/**
+**/.idea/**
+**/output/**
+**/bin/**
+**/obj/**
+**/build/**
+**/build_*/**
+*.DotSettings.user
+**/runtimes/**/*.dll
+**/runtimes/**/*.so
+**/runtimes/**/*.dylib

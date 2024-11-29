@@ -1,0 +1,3 @@
+[submodule "GSE"]
+	path = GSE
+	url = https://github.com/CasualPokePlayer/GSE.git
