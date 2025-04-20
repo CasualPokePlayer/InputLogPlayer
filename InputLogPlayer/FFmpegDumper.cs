@@ -89,11 +89,11 @@ internal sealed class FFmpegDumper : IDisposable
 				RedirectStandardInput = true
 			};
 
-            _ffmpegProcess = new()
-            {
-                StartInfo = startInfo
-            };
-            _ffmpegProcess.Start();
+			_ffmpegProcess = new()
+			{
+				StartInfo = startInfo
+			};
+			_ffmpegProcess.Start();
 			_ffmpegStdin = _ffmpegProcess.StandardInput.BaseStream;
 			WriteMainHeader();
 			WriteVideoHeader(videoWidth, videoHeight);
