@@ -23,6 +23,7 @@ internal static class InputLogPlayer
 	private static readonly Option<string> _biosOption = new(name: "--bios", description: "Path to BIOS to be loaded") { Arity = ArgumentArity.ExactlyOne, IsRequired = true };
 	private static readonly Option<string> _gm2Option = new(name: "--gm2", description: "Path to .gm2 to be played back") { Arity = ArgumentArity.ExactlyOne, IsRequired = true };
 	private static readonly Option<bool> _unthrottledOption = new(name: "--unthrottled", description: "Run at maximum speed") { Arity = ArgumentArity.Zero };
+	private static readonly Option<bool> _dumpAvOption = new(name: "--dump-av", description: "Dump audio/video as an MP4, usually used with --unthrottled") { Arity = ArgumentArity.Zero };
 
 	private static bool IsQuitEvent(in SDL_Event sdlEvent)
 	{
@@ -45,7 +46,7 @@ internal static class InputLogPlayer
 
 	private static void Throttle(uint cpuCycles, uint cpuFreq)
 	{
-		// same as samples / audioFreq * timerFreq, but avoids needing to use float math
+		// same as cpuCycles / cpuFreq * timerFreq, but avoids needing to use float math
 		// note that Stopwatch.Frequency is typically 10MHz on Windows, and always 1000MHz on non-Windows
 		// (ulong cast is needed here, due to the amount of cpu cycles a gba could produce)
 		var timeToThrottle = (long)((ulong)_timerFreq * cpuCycles / cpuFreq);
@@ -116,8 +117,8 @@ internal static class InputLogPlayer
 			SDL_UnlockTexture(sdlTexture);
 		}
 
-		_ = SDL_RenderCopy(sdlRenderer, sdlTexture, 0, 0);
-        SDL_RenderPresent(sdlRenderer);
+		_ = SDL_RenderCopy(sdlRenderer, sdlTexture, 0, 0); 
+		SDL_RenderPresent(sdlRenderer);
 	}
 
 	private static int Main(string[] args)
@@ -131,7 +132,8 @@ internal static class InputLogPlayer
 			_romOption,
 			_biosOption,
 			_gm2Option,
-			_unthrottledOption
+			_unthrottledOption,
+			_dumpAvOption
 		};
 
 		var helpUsed = false;
@@ -155,6 +157,17 @@ internal static class InputLogPlayer
 		var biosPath = result.GetValueForOption(_biosOption);
 		var gm2Path = result.GetValueForOption(_gm2Option);
 		var unthrottled = result.GetValueForOption(_unthrottledOption);
+		var dumpAv = result.GetValueForOption(_dumpAvOption);
+
+		if (dumpAv)
+		{
+			if (!FFmpegDumper.IsAvailable)
+			{
+				Console.Error.WriteLine("FFmpeg executable cannot be found. A/V dumping requires FFmpeg.");
+				Console.Error.WriteLine("Visit https://ffmpeg.org/download.html to download FFmpeg.");
+				return -1;
+			}
+		}
 
 		using var emuCore = EmuCoreFactory.CreateEmuCore(romPath, biosPath, gm2Path);
 
@@ -219,10 +232,21 @@ internal static class InputLogPlayer
 			var videoHeight = emuCore.VideoHeight;
 			var videoPitch = emuCore.VideoWidth * sizeof(uint);
 			using var audioManager = new AudioManager(emuCore.AudioFrequency, unthrottled);
+			using var avDumper = new FFmpegDumper(gm2Path, emuCore.AudioFrequency, emuCore.VideoWidth, videoHeight, dumpAv);
 
 			while (true)
 			{
 				emuCore.Advance(out var completedFrame, out var numSamples, out var cpuCycles);
+
+				if (dumpAv)
+				{
+					if (completedFrame)
+					{
+						avDumper.WriteVideoFrame(emuCore.VideoBuffer);
+					}
+
+					avDumper.WriteAudioFrame(emuCore.AudioBuffer[..(int)(numSamples * 2)]);
+				}
 
 				if (!unthrottled)
 				{
