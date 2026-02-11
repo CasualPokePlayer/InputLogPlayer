@@ -78,6 +78,7 @@ CMakeNinjaBuild() {
 
 CMakeNinjaBuild SDL3
 CMakeNinjaBuild gambatte
+export EXTRA_CMAKE_ARGS="${EXTRA_CMAKE_ARGS} -DCMAKE_C_STANDARD_REQUIRED=OFF"
 CMakeNinjaBuild mgba
 
 # Install dotnet8 sdk
