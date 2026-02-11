@@ -3,9 +3,9 @@
 
 using System;
 using System.CommandLine;
-using System.CommandLine.Completions;
 using System.CommandLine.Parsing;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -49,6 +49,12 @@ internal static class InputLogPlayer
 	private static readonly Option<bool> _dumpAvOption = new(name: "--dump-av")
 	{
 		Description = "Dump audio/video as an MP4, usually used with --unthrottled",
+		Arity = ArgumentArity.Zero
+	};
+
+	private static readonly Option<bool> _convertGbiOption = new(name: "--convert-gbi")
+	{
+		Description = "Convert gm2 to a GBI input log and exit immediately",
 		Arity = ArgumentArity.Zero
 	};
 
@@ -158,7 +164,8 @@ internal static class InputLogPlayer
 			_biosOption,
 			_gm2Option,
 			_unthrottledOption,
-			_dumpAvOption
+			_dumpAvOption,
+			_convertGbiOption
 		};
 
 		// Remove version option (doesn't make sense here)
@@ -182,6 +189,58 @@ internal static class InputLogPlayer
 		var gm2Path = result.GetRequiredValue(_gm2Option);
 		var unthrottled = result.GetValue(_unthrottledOption);
 		var dumpAv = result.GetValue(_dumpAvOption);
+		var convertGbi = result.GetValue(_convertGbiOption);
+
+		if (convertGbi)
+		{
+			using var emuInputLog = new EmuInputLog(gm2Path);
+
+			if (emuInputLog.Platform is not (EmuInputLog.EmuPlatform.GBC_GBA or EmuInputLog.EmuPlatform.GBA))
+			{
+				Console.Error.WriteLine("GBI input logs require GBC in GBA or GBA.");
+				return -1;
+			}
+
+			if (emuInputLog.StartsFromSavestate)
+			{
+				Console.Error.WriteLine("GBI input logs require starting from Power-On.");
+				return -1;
+			}
+
+			{
+				using var startSav = File.Create(Path.ChangeExtension(gm2Path, ".sav"));
+				startSav.Write(emuInputLog.StateOrSave.Span);
+			}
+
+			using var gbiInputLog = new StreamWriter(Path.ChangeExtension(gm2Path, ".txt"));
+			var gbiCycleCount = 0UL;
+			while (true)
+			{
+				var movieInput = emuInputLog.GetNextInput();
+				if (!movieInput.HasValue)
+				{
+					break;
+				}
+
+				if (movieInput.Value.HardReset)
+				{
+					Console.WriteLine("Hard reset detected, this is not supported by GBI input logs. Ending conversion.");
+					break;
+				}
+
+				var gbiCyclesRan = movieInput.Value.CpuCyclesRan;
+				if (emuInputLog.Platform is EmuInputLog.EmuPlatform.GBC_GBA)
+				{
+					// convert 2MiHz to 16MiHz
+					gbiCyclesRan *= 8;
+				}
+
+				gbiCycleCount += gbiCyclesRan;
+				gbiInputLog.WriteLine($"{gbiCycleCount:X8} {(uint)movieInput.Value.GBAInputState:X4}");
+			}
+
+			return 0;
+		}
 
 		if (dumpAv)
 		{
