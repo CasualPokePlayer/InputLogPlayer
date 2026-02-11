@@ -82,9 +82,9 @@ CMakeNinjaBuild gambatte
 # Seems mGBA build is broken for 0.5, due to CMAKE_C_EXTENSIONS being set OFF when it should be ON
 # Workaround it like so
 if [ $TARGET_RID = "linux-x64" ]; then
-	export EXTRA_CMAKE_ARGS="-DCMAKE_C_FLAGS='-D_GNU_SOURCE'"
+	export EXTRA_CMAKE_ARGS="-DCMAKE_C_FLAGS=-D_GNU_SOURCE"
 else # "linux-arm64"
-	export EXTRA_CMAKE_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_FLAGS='--target=aarch64-linux-gnu -D_GNU_SOURCE' -DCMAKE_CXX_FLAGS=--target=aarch64-linux-gnu"
+	export EXTRA_CMAKE_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_FLAGS=-D_GNU_SOURCE -DCMAKE_C_FLAGS=--target=aarch64-linux-gnu -DCMAKE_CXX_FLAGS=--target=aarch64-linux-gnu"
 fi
 
 CMakeNinjaBuild mgba
