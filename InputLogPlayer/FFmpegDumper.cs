@@ -194,8 +194,7 @@ internal sealed class FFmpegDumper : IDisposable
 			WriteVar((uint)payload.Length); // data_size_msb
 
 			WriteChecksum();
-			var bufferUsed = BufferUsedSpan();
-			output.Write(bufferUsed);
+			output.Write(BufferUsedSpan());
 			output.Write(payload);
 
 			Dispose();
@@ -231,32 +230,28 @@ internal sealed class FFmpegDumper : IDisposable
 			CheckDisposed();
 			WriteVar((uint)b.Length);
 			EnsureBuffer((uint)b.Length);
-			var bufferAvail = BufferAvailSpan();
-			b.CopyTo(bufferAvail);
+			b.CopyTo(BufferAvailSpan());
 			_pos += (uint)b.Length;
 		}
 
 		private void WriteByte(byte b)
 		{
 			EnsureBuffer(sizeof(byte));
-			var bufferAvail = BufferAvailSpan();
-			bufferAvail[0] = b;
+			BufferAvailSpan()[0] = b;
 			_pos += sizeof(byte);
 		}
 
 		private void Write32(uint v)
 		{
 			EnsureBuffer(sizeof(uint));
-			var bufferAvail = BufferAvailSpan();
-			BinaryPrimitives.WriteUInt32BigEndian(bufferAvail, v);
+			BinaryPrimitives.WriteUInt32BigEndian(BufferAvailSpan(), v);
 			_pos += sizeof(uint);
 		}
 
 		private void Write64(ulong v)
 		{
 			EnsureBuffer(sizeof(ulong));
-			var bufferAvail = BufferAvailSpan();
-			BinaryPrimitives.WriteUInt64BigEndian(bufferAvail, v);
+			BinaryPrimitives.WriteUInt64BigEndian(BufferAvailSpan(), v);
 			_pos += sizeof(ulong);
 		}
 
@@ -297,13 +292,14 @@ internal sealed class FFmpegDumper : IDisposable
 			var neededLength = _pos + spaceNeeded;
 			if (neededLength > MAX_BUFFER_SIZE)
 			{
-				throw new Exception("Exceeded maximum buffer size");
+				throw new("Exceeded maximum buffer size");
 			}
 
 			if (neededLength > _length)
 			{
-				_length = ((_length + spaceNeeded - 1) | PAGE_MASK) + 1;
-				_buffer = NativeMemory.Realloc(_buffer, _length);
+				var length = ((neededLength - 1) | PAGE_MASK) + 1;
+				_buffer = NativeMemory.Realloc(_buffer, length);
+				_length = length;
 			}
 		}
 

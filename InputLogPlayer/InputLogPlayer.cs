@@ -13,7 +13,7 @@ using System.Threading;
 using InputLogPlayer.Audio;
 using InputLogPlayer.Cores;
 
-using static SDL2.SDL;
+using static SDL3.SDL;
 
 namespace InputLogPlayer;
 
@@ -27,15 +27,13 @@ internal static class InputLogPlayer
 
 	private static bool IsQuitEvent(in SDL_Event sdlEvent)
 	{
-		return sdlEvent.type is SDL_EventType.SDL_QUIT ||
-		       sdlEvent is { type: SDL_EventType.SDL_WINDOWEVENT, window.windowEvent: SDL_WindowEventID.SDL_WINDOWEVENT_CLOSE };
+		return (SDL_EventType)sdlEvent.type is SDL_EventType.SDL_EVENT_QUIT or SDL_EventType.SDL_EVENT_WINDOW_CLOSE_REQUESTED;
 	}
 
 	[UnmanagedCallersOnly(CallConvs = [ typeof(CallConvCdecl) ])]
-	private static unsafe int SDLEventFilter(nint userdata, nint sdlEvent)
+	private static unsafe SDLBool SDLEventFilter(nint userdata, SDL_Event* sdlEvent)
 	{
-		var e = (SDL_Event*)sdlEvent;
-		return IsQuitEvent(in *e) ? 1 : 0;
+		return IsQuitEvent(in *sdlEvent);
 	}
 
 	private const int TIMER_FIXED_SHIFT = 15;
@@ -91,7 +89,7 @@ internal static class InputLogPlayer
 
 	private static unsafe void RenderVideo(ReadOnlySpan<uint> videoBuffer, int videoHeight, int videoPitch, nint sdlTexture, nint sdlRenderer)
 	{
-		if (SDL_LockTexture(sdlTexture, 0, out var pixels, out var pitch) != 0)
+		if (!SDL_LockTexture(sdlTexture, ref Unsafe.NullRef<SDL_Rect>(), out var pixels, out var pitch))
 		{
 			throw new($"Failed to lock SDL texture, SDL error {SDL_GetError()}");
 		}
@@ -117,8 +115,8 @@ internal static class InputLogPlayer
 			SDL_UnlockTexture(sdlTexture);
 		}
 
-		_ = SDL_RenderCopy(sdlRenderer, sdlTexture, 0, 0); 
-		SDL_RenderPresent(sdlRenderer);
+		_ = SDL_RenderTexture(sdlRenderer, sdlTexture, ref Unsafe.NullRef<SDL_FRect>(), ref Unsafe.NullRef<SDL_FRect>()); 
+		_ = SDL_RenderPresent(sdlRenderer);
 	}
 
 	private static int Main(string[] args)
@@ -176,9 +174,7 @@ internal static class InputLogPlayer
 			SDL_SetEventFilter(&SDLEventFilter, 0); // filter out events which we don't care for
 		}
 
-		SDL_SetHint("SDL_WINDOWS_DPI_SCALING", "1");
-
-		if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0)
+		if (!SDL_Init(SDL_InitFlags.SDL_INIT_VIDEO | SDL_InitFlags.SDL_INIT_EVENTS))
 		{
 			throw new($"Could not init SDL video! SDL error: {SDL_GetError()}");
 		}
@@ -186,41 +182,41 @@ internal static class InputLogPlayer
 		nint sdlWindow = 0, sdlRenderer = 0, emuTexture = 0;
 		try
 		{
-			const SDL_WindowFlags windowFlags = SDL_WindowFlags.SDL_WINDOW_ALLOW_HIGHDPI | SDL_WindowFlags.SDL_WINDOW_HIDDEN;
-			sdlWindow = SDL_CreateWindow("Input Log Player", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, emuCore.VideoWidth * 3, emuCore.VideoHeight * 3, windowFlags);
+			const SDL_WindowFlags windowFlags = SDL_WindowFlags.SDL_WINDOW_HIDDEN;
+			sdlWindow = SDL_CreateWindow("Input Log Player", emuCore.VideoWidth * 3, emuCore.VideoHeight * 3, windowFlags);
 			if (sdlWindow == 0)
 			{
 				throw new($"Could not create SDL window! SDL error: {SDL_GetError()}");
 			}
 
-			sdlRenderer = SDL_CreateRenderer(sdlWindow, -1, SDL_RendererFlags.SDL_RENDERER_ACCELERATED);
+			sdlRenderer = SDL_CreateRenderer(sdlWindow, null);
 			if (sdlRenderer == 0)
 			{
-				Console.Error.WriteLine("Default accelerated render driver could not be created, falling back on software render driver.");
-
-				sdlRenderer = SDL_CreateRenderer(sdlWindow, -1, SDL_RendererFlags.SDL_RENDERER_SOFTWARE);
-				if (sdlRenderer == 0)
-				{
-					throw new($"Could not create SDL renderer! SDL error: {SDL_GetError()}");
-				}
-
-				// go back to 1x window size if we're software rendering
-				SDL_SetWindowSize(sdlWindow, emuCore.VideoWidth, emuCore.VideoHeight);
+				throw new($"Could not create SDL renderer! SDL error: {SDL_GetError()}");
 			}
 
-			emuTexture = SDL_CreateTexture(sdlRenderer, SDL_PIXELFORMAT_ARGB8888,
-				(int)SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING, emuCore.VideoWidth, emuCore.VideoHeight);
+			if (!SDL_SetRenderVSync(sdlRenderer, 0))
+			{
+				throw new($"Could not disable vsync for SDL renderer! SDL error: {SDL_GetError()}");
+			}
+
+			unsafe
+			{
+				emuTexture = (nint)SDL_CreateTexture(sdlRenderer, SDL_PixelFormat.SDL_PIXELFORMAT_ARGB8888,
+					SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING, emuCore.VideoWidth, emuCore.VideoHeight);
+			}
+
 			if (emuTexture == 0)
 			{
 				throw new($"Failed to create video texture, SDL error: {SDL_GetError()}");
 			}
 
-			if (SDL_SetTextureScaleMode(emuTexture, SDL_ScaleMode.SDL_ScaleModeNearest) != 0)
+			if (!SDL_SetTextureScaleMode(emuTexture, SDL_ScaleMode.SDL_SCALEMODE_NEAREST))
 			{
 				throw new($"Failed to set texture scaling mode, SDL error: {SDL_GetError()}");
 			}
 
-			if (SDL_SetTextureBlendMode(emuTexture, SDL_BlendMode.SDL_BLENDMODE_NONE) != 0)
+			if (!SDL_SetTextureBlendMode(emuTexture, SDL_BLENDMODE_NONE))
 			{
 				throw new($"Failed to set texture blend mode, SDL error: {SDL_GetError()}");
 			}
@@ -269,7 +265,7 @@ internal static class InputLogPlayer
 						RenderVideo(emuCore.VideoBuffer, videoHeight, videoPitch, emuTexture, sdlRenderer);
 					}
 
-					while (SDL_PollEvent(out var sdlEvent) != 0)
+					while (SDL_PollEvent(out var sdlEvent))
 					{
 						if (IsQuitEvent(in sdlEvent))
 						{
@@ -286,7 +282,8 @@ internal static class InputLogPlayer
 			SDL_DestroyTexture(emuTexture);
 			SDL_DestroyRenderer(sdlRenderer);
 			SDL_DestroyWindow(sdlWindow);
-			SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+			SDL_QuitSubSystem(SDL_InitFlags.SDL_INIT_VIDEO | SDL_InitFlags.SDL_INIT_EVENTS);
+			SDL_Quit();
 		}
 	}
 }

@@ -38,7 +38,7 @@ CMakeNinjaBuild() {
 	cd ..
 }
 
-CMakeNinjaBuild SDL2
+CMakeNinjaBuild SDL3
 CMakeNinjaBuild gambatte
 CMakeNinjaBuild mgba
 
@@ -61,7 +61,7 @@ mkdir output/$TARGET_RID/InputLogPlayer.app/Contents/MacOS
 
 # Merge the binaries together
 lipo output/osx-x64/publish/InputLogPlayer output/osx-arm64/publish/InputLogPlayer -create -output output/$TARGET_RID/InputLogPlayer.app/Contents/MacOS/InputLogPlayer
-lipo output/osx-x64/publish/libSDL2.dylib output/osx-arm64/publish/libSDL2.dylib -create -output output/$TARGET_RID/InputLogPlayer.app/Contents/MacOS/libSDL2.dylib
+lipo output/osx-x64/publish/libSDL3.dylib output/osx-arm64/publish/libSDL3.dylib -create -output output/$TARGET_RID/InputLogPlayer.app/Contents/MacOS/libSDL3.dylib
 lipo output/osx-x64/publish/libgambatte.dylib output/osx-arm64/publish/libgambatte.dylib -create -output output/$TARGET_RID/InputLogPlayer.app/Contents/MacOS/libgambatte.dylib
 lipo output/osx-x64/publish/libmgba.dylib output/osx-arm64/publish/libmgba.dylib -create -output output/$TARGET_RID/InputLogPlayer.app/Contents/MacOS/libmgba.dylib
 

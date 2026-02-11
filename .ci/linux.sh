@@ -5,13 +5,13 @@
 # Install some base tools
 apt-get install -y wget lsb-release software-properties-common gpg ninja-build pkg-config
 
-# Install clang 18
+# Install clang 21
 wget https://apt.llvm.org/llvm.sh -O $HOME/llvm.sh
 chmod +x $HOME/llvm.sh
-$HOME/llvm.sh 18
+$HOME/llvm.sh 21
 
 # Enable backports packages
-echo "deb http://deb.debian.org/debian bullseye-backports main" | tee /etc/apt/sources.list.d/backports.list
+echo "deb http://archive.debian.org/debian bullseye-backports main" | tee /etc/apt/sources.list.d/backports.list
 apt-get update
 
 # Normally cmake from standard bulleye packages is enough
@@ -23,13 +23,14 @@ apt-get install -y cmake/bullseye-backports
 if [ $TARGET_RID = "linux-x64" ]; then
 	# Nothing special needed here
 	export EXTRA_CMAKE_ARGS=""
-	# Install SDL2 dependencies
-	apt-get install -y libasound2-dev libpulse-dev libaudio-dev libjack-jackd2-dev libsamplerate0-dev \
-		libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev \
-		libxss-dev libwayland-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev \
+	# Install SDL3 dependencies
+	apt-get install -y gnome-desktop-testing libasound2-dev libpulse-dev \
+		libaudio-dev libfribidi-dev libjack-jackd2-dev libsndio-dev libx11-dev \
+		libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev \
+		libxtst-dev libwayland-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev \
 		libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev \
-		fcitx-libs-dev libudev-dev libusb-1.0-0-dev pkg-config
-	# More SDL2 dependencies only under backports
+		fcitx-libs-dev libudev-dev libusb-1.0-0-dev liburing-dev libthai-dev pkg-config
+	# More SDL3 dependencies only under backports
 	apt-get install -y libdecor-0-dev/bullseye-backports libpipewire-0.3-dev/bullseye-backports
 	# Install .NET AOT dependencies
 	apt-get install -y zlib1g-dev
@@ -45,13 +46,14 @@ elif [ $TARGET_RID = "linux-arm64" ]; then
 	# Enable ARM64 packages
 	dpkg --add-architecture arm64
 	apt-get update
-	# Install SDL2 dependencies
-	apt-get install -y libasound2-dev:arm64 libpulse-dev:arm64 libaudio-dev:arm64 libjack-jackd2-dev:arm64 libsamplerate0-dev:arm64 \
-		libx11-dev:arm64 libxext-dev:arm64 libxrandr-dev:arm64 libxcursor-dev:arm64 libxfixes-dev:arm64 libxi-dev:arm64 \
-		libxss-dev:arm64 libwayland-dev:arm64 libxkbcommon-dev:arm64 libdrm-dev:arm64 libgbm-dev:arm64 libgl1-mesa-dev:arm64 \
+	# Install SDL3 dependencies
+	apt-get install -y gnome-desktop-testing:arm64 libasound2-dev:arm64 libpulse-dev:arm64 libaudio-dev:arm64 \
+		libfribidi-dev:arm64 libjack-jackd2-dev:arm64 libsndio-dev:arm64 libx11-dev:arm64 libxext-dev:arm64 \
+		libxrandr-dev:arm64 libxcursor-dev:arm64 libxfixes-dev:arm64 libxi-dev:arm64 libxss-dev:arm64 libxtst-dev:arm64 \
+		libwayland-dev:arm64 libxkbcommon-dev:arm64 libdrm-dev:arm64 libgbm-dev:arm64 libgl1-mesa-dev:arm64 \
 		libgles2-mesa-dev:arm64 libegl1-mesa-dev:arm64 libdbus-1-dev:arm64 libibus-1.0-dev:arm64 \
-		fcitx-libs-dev:arm64 libudev-dev:arm64 libusb-1.0-0-dev:arm64
-	# More SDL2 dependencies only under backports
+		fcitx-libs-dev:arm64 libudev-dev:arm64 libusb-1.0-0-dev:arm64 liburing-dev:arm64 libthai-dev:arm64
+	# More SDL3 dependencies only under backports
 	apt-get install -y libdecor-0-dev:arm64/bullseye-backports libpipewire-0.3-dev:arm64/bullseye-backports
 	# Install .NET AOT dependencies
 	apt-get install -y zlib1g-dev:arm64
@@ -65,8 +67,8 @@ CMakeNinjaBuild() {
 	cd build_$1_shared_$TARGET_RID
 	cmake ../../GSE/externals/$1 \
 		-DCMAKE_BUILD_TYPE=Release \
-		-DCMAKE_C_COMPILER=clang-18 \
-		-DCMAKE_CXX_COMPILER=clang++-18 \
+		-DCMAKE_C_COMPILER=clang-21 \
+		-DCMAKE_CXX_COMPILER=clang++-21 \
 		$EXTRA_CMAKE_ARGS \
 		-G Ninja \
 		-DGSE_SHARED=ON
@@ -74,7 +76,7 @@ CMakeNinjaBuild() {
 	cd ..
 }
 
-CMakeNinjaBuild SDL2
+CMakeNinjaBuild SDL3
 CMakeNinjaBuild gambatte
 CMakeNinjaBuild mgba
 
@@ -86,4 +88,4 @@ export PATH=$HOME/.dotnet:$PATH
 
 # Build InputLogPlayer
 cd ..
-dotnet publish -r $TARGET_RID -p:CppCompilerAndLinker=clang-18 -p:LinkerFlavor=lld-18 -p:ObjCopyName=llvm-objcopy-18
+dotnet publish -r $TARGET_RID -p:CppCompilerAndLinker=clang-21 -p:LinkerFlavor=lld-21 -p:ObjCopyName=llvm-objcopy-21

@@ -11,7 +11,7 @@ internal sealed class MGBACore : IEmuCore
 {
 	private readonly nint _opaque;
 	private readonly uint[] _videoBuffer = new uint[240 * 160];
-	private readonly short[] _audioBuffer = new short[1024 * 2];
+	private readonly short[] _audioBuffer = new short[0x2000 * 2];
 
 	private readonly EmuInputLog _emuInputLog;
 
@@ -20,7 +20,7 @@ internal sealed class MGBACore : IEmuCore
 		_emuInputLog = emuInputLog;
 		try
 		{
-			_opaque = mgba_create(romData, romData.Length, biosData, biosData.Length, _emuInputLog.GbaRtcDisabled);
+			_opaque = mgba_create(romData, romData.Length, biosData, biosData.Length, _emuInputLog.GbaRtcDisabled, _emuInputLog.GbaRtcTime);
 			if (_opaque == 0)
 			{
 				throw new("Failed to create core opaque state!");
@@ -30,16 +30,14 @@ internal sealed class MGBACore : IEmuCore
 
 			if (_emuInputLog.StartsFromSavestate)
 			{
-				if (!mgba_loadstate(_opaque, _emuInputLog.StateOrSave.Span, _emuInputLog.StateOrSave.Length))
+				if (!mgba_loadstate(_opaque, _emuInputLog.StateOrSave.Span, _emuInputLog.StateOrSave.Length, _emuInputLog.GbaRtcTime))
 				{
 					throw new("Failed to load savestate!");
 				}
 			}
 			else
 			{
-				var savBuffer = new byte[0x20000 + 16];
-				_emuInputLog.StateOrSave.Span.CopyTo(savBuffer);
-				mgba_loadsavedata(_opaque, savBuffer);
+				mgba_loadsavedata(_opaque, _emuInputLog.StateOrSave.Span, _emuInputLog.StateOrSave.Length, _emuInputLog.GbaRtcTime);
 			}
 		}
 		catch
@@ -99,7 +97,7 @@ internal sealed class MGBACore : IEmuCore
 	public int VideoHeight => 160;
 
 	public ReadOnlySpan<short> AudioBuffer => _audioBuffer;
-	public int AudioFrequency => 32768;
+	public int AudioFrequency => 262144;
 
 	public uint CpuFrequency => 16777216;
 }

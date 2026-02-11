@@ -9,7 +9,7 @@ if "%TARGET_RID%" == "win-x64" (
 	EXIT /b 1
 )
 
-call:CMakeNinjaBuild SDL2
+call:CMakeNinjaBuild SDL3
 call:CMakeNinjaBuild gambatte
 call:CMakeNinjaBuild mgba
 

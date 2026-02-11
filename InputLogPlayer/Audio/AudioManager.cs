@@ -7,7 +7,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using static SDL2.SDL;
+using static SDL3.SDL;
 
 namespace InputLogPlayer.Audio;
 
@@ -19,60 +19,61 @@ public sealed class AudioManager : IDisposable
 	private readonly AudioRingBuffer OutputAudioBuffer = new();
 
 	[UnmanagedCallersOnly(CallConvs = [ typeof(CallConvCdecl) ])]
-	private static unsafe void SDLAudioCallback(nint userdata, nint stream, int len)
+	private static unsafe void SDLAudioCallback(nint userdata, nint stream, int additionalAmount, int totalAmount)
 	{
 		var manager = (AudioManager)GCHandle.FromIntPtr(userdata).Target!;
-		var samples = len / 2;
-		var samplesRead = manager.OutputAudioBuffer.Read(new((void*)stream, samples));
+		var samples = additionalAmount / 2;
+		var sampleBuffer = samples > 2048
+			? new short[samples]
+			: stackalloc short[samples];
+		var samplesRead = manager.OutputAudioBuffer.Read(sampleBuffer);
 		if (samplesRead < samples)
 		{
 			Debug.WriteLine($"AUDIO UNDERRUN! Only read {samplesRead} samples (wanted {samples} samples)");
-			new Span<short>((void*)(stream + samplesRead * 2), samples - samplesRead).Clear();
+			sampleBuffer[samplesRead..].Clear();
+		}
+
+		fixed (short* sampleBufferPtr = sampleBuffer)
+		{
+			_ = SDL_PutAudioStreamData(stream, (nint)sampleBufferPtr, sampleBuffer.Length * 2);
 		}
 	}
+
+	private readonly object _resamplerLock = new();
 
 	private readonly BlipBuffer _resampler;
 	private int _lastL, _lastR;
 	private short[] _resamplingBuffer = [];
 
-	private uint _sdlAudioDeviceId;
+	private nint _sdlAudioDeviceStream;
 	private GCHandle _sdlUserData;
 
-	private static int GetDefaultDeviceSampleRate()
+	private unsafe int OpenAudioDevice()
 	{
-		const int FALLBACK_FREQ = 48000;
-		return SDL_GetDefaultAudioInfo(out _, out var spec, iscapture: 0) == 0 ? spec.freq : FALLBACK_FREQ;
-	}
-
-	private int OpenAudioDevice()
-	{
-		var wantedSdlAudioSpec = default(SDL_AudioSpec);
-		wantedSdlAudioSpec.freq = GetDefaultDeviceSampleRate(); // try to use the device sample rate, so we can avoid a secondary resampling by SDL or whatever native api is used
-		wantedSdlAudioSpec.format = AUDIO_S16SYS;
-		wantedSdlAudioSpec.channels = 2;
-		wantedSdlAudioSpec.samples = 512; // we'll let this change to however SDL best wants it
-		wantedSdlAudioSpec.userdata = GCHandle.ToIntPtr(_sdlUserData);
-
-		unsafe
+		if (!SDL_GetAudioDeviceFormat(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, out var deviceAudioSpec, out _))
 		{
-			wantedSdlAudioSpec.callback = &SDLAudioCallback;
+			throw new($"Failed to obtain the default audio device format, SDL error: {SDL_GetError()}");
 		}
 
-		var deviceId = SDL_OpenAudioDevice(
-			device: null,
-			iscapture: 0,
-			desired: ref wantedSdlAudioSpec,
-			obtained: out var obtainedAudioSpec,
-			allowed_changes: (int)(SDL_AUDIO_ALLOW_SAMPLES_CHANGE | SDL_AUDIO_ALLOW_FREQUENCY_CHANGE)
+		var wantedAudioSpec = default(SDL_AudioSpec);
+		wantedAudioSpec.freq = deviceAudioSpec.freq; // try to use the device sample rate, so we can avoid a secondary resampling by SDL or whatever native api is used
+		wantedAudioSpec.format = SDL_AUDIO_S16;
+		wantedAudioSpec.channels = 2;
+
+		var audioDeviceStream = SDL_OpenAudioDeviceStream(
+			devid: SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+			spec: ref wantedAudioSpec,
+			callback: &SDLAudioCallback,
+			userdata: GCHandle.ToIntPtr(_sdlUserData)
 		);
 
-		if (deviceId == 0)
+		if (audioDeviceStream == 0)
 		{
 			throw new($"Failed to open audio device, SDL error: {SDL_GetError()}");
 		}
 
-		_sdlAudioDeviceId = deviceId;
-		return obtainedAudioSpec.freq;
+		_sdlAudioDeviceStream = audioDeviceStream;
+		return wantedAudioSpec.freq;
 	}
 
 	public void DispatchAudio(ReadOnlySpan<short> samples)
@@ -106,7 +107,7 @@ public sealed class AudioManager : IDisposable
 			return;
 		}
 
-		if (SDL_Init(SDL_INIT_AUDIO) != 0)
+		if (!SDL_Init(SDL_InitFlags.SDL_INIT_AUDIO))
 		{
 			throw new($"Could not init SDL audio! SDL error: {SDL_GetError()}");
 		}
@@ -121,7 +122,7 @@ public sealed class AudioManager : IDisposable
 			_resampler.Clear();
 			OutputAudioBuffer.Reset(100 * 2 * outputAudioFrequency * 2 / 1000, 0);
 
-			SDL_PauseAudioDevice(_sdlAudioDeviceId, pause_on: 0);
+			SDL_ResumeAudioStreamDevice(_sdlAudioDeviceStream);
 		}
 		catch
 		{
@@ -134,9 +135,9 @@ public sealed class AudioManager : IDisposable
 	{
 		_resampler?.Dispose();
 
-		if (_sdlAudioDeviceId != 0)
+		if (_sdlAudioDeviceStream != 0)
 		{
-			SDL_CloseAudioDevice(_sdlAudioDeviceId);
+			SDL_DestroyAudioStream(_sdlAudioDeviceStream);
 		}
 
 		if (_sdlUserData.IsAllocated)
@@ -144,6 +145,6 @@ public sealed class AudioManager : IDisposable
 			_sdlUserData.Free();
 		}
 
-		SDL_QuitSubSystem(SDL_INIT_AUDIO);
+		SDL_QuitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO);
 	}
 }

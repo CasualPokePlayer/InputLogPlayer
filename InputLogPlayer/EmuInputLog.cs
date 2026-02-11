@@ -66,10 +66,10 @@ internal sealed class EmuInputLog : IDisposable
 		}
 	}
 
-	private const int GM2_VERSION = 1;
+	private const int GM2_VERSION = 2;
 	private const ulong GM2_MAGIC = 0x4753454D4F564945;
 
-	[StructLayout(LayoutKind.Sequential)]
+	[StructLayout(LayoutKind.Sequential, Size = 1024)]
 	private struct EmuInputLogHeader
 	{
 		/// <summary>
@@ -131,6 +131,12 @@ internal sealed class EmuInputLog : IDisposable
 		public HeaderString EmuVersion;
 
 		/// <summary>
+		/// GBA RTC time as a unix timestamp, used for mgba_create/mgba_loadsavedata/mgba_loadstate
+		/// For movies which start from a savestate, this is more a backup in case the savestate is missing RTC data 
+		/// </summary>
+		public long GbaRtcTime;
+
+		/// <summary>
 		/// Normalizes little endian to native endianness
 		/// (Except for magic, which is normally big endian)
 		/// </summary>
@@ -145,6 +151,7 @@ internal sealed class EmuInputLog : IDisposable
 				StartTimestamp = BinaryPrimitives.ReverseEndianness(StartTimestamp);
 				GbRtcDividers = BinaryPrimitives.ReverseEndianness(GbRtcDividers);
 				StateOrSaveSize = BinaryPrimitives.ReverseEndianness(StateOrSaveSize);
+				GbaRtcTime = BinaryPrimitives.ReverseEndianness(GbaRtcTime);
 			}
 			else
 			{
@@ -174,6 +181,7 @@ internal sealed class EmuInputLog : IDisposable
 	public bool StartsFromSavestate => (_header.Flags & MovieFlags.StartsFromSaveState) != 0;
 	public bool GbaRtcDisabled => (_header.Flags & MovieFlags.GbaRtcDisabled) != 0;
 	public ulong GbRtcDividers => _header.GbRtcDividers;
+	public long GbaRtcTime => _header.GbaRtcTime;
 	public ReadOnlyMemory<byte> StateOrSave { get; }
 
 	public EmuInputLog(string gm2Path)
@@ -226,14 +234,13 @@ internal sealed class EmuInputLog : IDisposable
 			{
 				Console.WriteLine($"GBA RTC Disabled: {GbaRtcDisabled}");
 			}
-			
+
 			var creationTime = DateTime.UnixEpoch.AddSeconds(_header.StartTimestamp);
 			Console.WriteLine($"Creation time: {creationTime}");
 
-			if (Platform != EmuPlatform.GBA)
-			{
-				Console.WriteLine($"GB RTC Dividers: {GbRtcDividers}");
-			}
+			Console.WriteLine(Platform != EmuPlatform.GBA
+				? $"GB RTC Dividers: {GbRtcDividers}"
+				: $"GBA RTC Time: {GbaRtcTime}");
 
 			var stateOrSaveStr = StartsFromSavestate ? "State" : "Save";
 			Console.WriteLine($"{stateOrSaveStr} Size: {_header.StateOrSaveSize}");

@@ -24,4 +24,3 @@ public enum EmuButtons : uint
 
 	HardReset = 1u << 31,
 }
-
