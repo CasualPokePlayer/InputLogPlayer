@@ -3,7 +3,7 @@
 
 using System;
 using System.CommandLine;
-using System.CommandLine.Builder;
+using System.CommandLine.Completions;
 using System.CommandLine.Parsing;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -19,11 +19,38 @@ namespace InputLogPlayer;
 
 internal static class InputLogPlayer
 {
-	private static readonly Option<string> _romOption = new(name: "--rom", description: "Path to ROM to be loaded") { Arity = ArgumentArity.ExactlyOne, IsRequired = true };
-	private static readonly Option<string> _biosOption = new(name: "--bios", description: "Path to BIOS to be loaded") { Arity = ArgumentArity.ExactlyOne, IsRequired = true };
-	private static readonly Option<string> _gm2Option = new(name: "--gm2", description: "Path to .gm2 to be played back") { Arity = ArgumentArity.ExactlyOne, IsRequired = true };
-	private static readonly Option<bool> _unthrottledOption = new(name: "--unthrottled", description: "Run at maximum speed") { Arity = ArgumentArity.Zero };
-	private static readonly Option<bool> _dumpAvOption = new(name: "--dump-av", description: "Dump audio/video as an MP4, usually used with --unthrottled") { Arity = ArgumentArity.Zero };
+	private static readonly Option<string> _romOption = new(name: "--rom")
+	{
+		Description = "Path to ROM to be loaded",
+		Arity = ArgumentArity.ExactlyOne,
+		Required = true
+	};
+
+	private static readonly Option<string> _biosOption = new(name: "--bios")
+	{
+		Description = "Path to BIOS to be loaded",
+		Arity = ArgumentArity.ExactlyOne,
+		Required = true
+	};
+
+	private static readonly Option<string> _gm2Option = new(name: "--gm2")
+	{
+		Description = "Path to .gm2 to be played back",
+		Arity = ArgumentArity.ExactlyOne,
+		Required = true
+	};
+
+	private static readonly Option<bool> _unthrottledOption = new(name: "--unthrottled")
+	{
+		Description = "Run at maximum speed",
+		Arity = ArgumentArity.Zero,
+	};
+
+	private static readonly Option<bool> _dumpAvOption = new(name: "--dump-av")
+	{
+		Description = "Dump audio/video as an MP4, usually used with --unthrottled",
+		Arity = ArgumentArity.Zero
+	};
 
 	private static bool IsQuitEvent(in SDL_Event sdlEvent)
 	{
@@ -121,11 +148,11 @@ internal static class InputLogPlayer
 
 	private static int Main(string[] args)
 	{
-		_romOption.LegalFileNamesOnly();
-		_biosOption.LegalFileNamesOnly();
-		_gm2Option.LegalFileNamesOnly();
+		_romOption.AcceptLegalFileNamesOnly();
+		_biosOption.AcceptLegalFileNamesOnly();
+		_gm2Option.AcceptLegalFileNamesOnly();
 
-		var root = new RootCommand
+		var root = new RootCommand(description: "GSE Input Log Player")
 		{
 			_romOption,
 			_biosOption,
@@ -134,28 +161,27 @@ internal static class InputLogPlayer
 			_dumpAvOption
 		};
 
-		var helpUsed = false;
-		var parser = new CommandLineBuilder(root)
-			.UseHelp(_ => helpUsed = true)
-			.UseParseDirective()
-			.UseSuggestDirective()
-			.UseTypoCorrections()
-			.UseParseErrorReporting()
-			.UseExceptionHandler()
-			.Build();
+		// Remove version option (doesn't make sense here)
+		for (var i = 0; i < root.Options.Count; i++)
+		{
+			if (root.Options[i] is VersionOption)
+			{
+				root.Options.RemoveAt(i--);
+			}
+		}
 
-		var result = parser.Parse(args);
+		var result = CommandLineParser.Parse(root, args);
 		var invokeResult = result.Invoke();
-		if (invokeResult != 0 || helpUsed)
+		if (invokeResult != 0 || result.Action != null)
 		{
 			return invokeResult;
 		}
 
-		var romPath = result.GetValueForOption(_romOption);
-		var biosPath = result.GetValueForOption(_biosOption);
-		var gm2Path = result.GetValueForOption(_gm2Option);
-		var unthrottled = result.GetValueForOption(_unthrottledOption);
-		var dumpAv = result.GetValueForOption(_dumpAvOption);
+		var romPath = result.GetRequiredValue(_romOption);
+		var biosPath = result.GetRequiredValue(_biosOption);
+		var gm2Path = result.GetRequiredValue(_gm2Option);
+		var unthrottled = result.GetValue(_unthrottledOption);
+		var dumpAv = result.GetValue(_dumpAvOption);
 
 		if (dumpAv)
 		{
