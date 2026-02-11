@@ -78,10 +78,18 @@ CMakeNinjaBuild() {
 
 CMakeNinjaBuild SDL3
 CMakeNinjaBuild gambatte
-export EXTRA_CMAKE_ARGS="${EXTRA_CMAKE_ARGS} -DCMAKE_C_STANDARD=17 -DCMAKE_C_EXTENSIONS=ON"
+
+# Seems mGBA build is broken for 0.5, due to CMAKE_C_EXTENSIONS being set OFF when it should be ON
+# Workaround it like so
+if [ $TARGET_RID = "linux-x64" ]; then
+	export EXTRA_CMAKE_ARGS="-DCMAKE_C_FLAGS=\"-D_POSIX_C_SOURCE=200112L\""
+else # "linux-arm64"
+	export EXTRA_CMAKE_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_FLAGS=\"--target=aarch64-linux-gnu -D_POSIX_C_SOURCE=200112L\" -DCMAKE_CXX_FLAGS=--target=aarch64-linux-gnu"
+fi
+
 CMakeNinjaBuild mgba
 
-# Install dotnet8 sdk
+# Install dotnet9 sdk
 wget https://dot.net/v1/dotnet-install.sh -O $HOME/dotnet-install.sh
 chmod +x $HOME/dotnet-install.sh
 $HOME/dotnet-install.sh --channel 9.0
