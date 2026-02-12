@@ -214,6 +214,8 @@ internal static class InputLogPlayer
 
 			using var gbiInputLog = new StreamWriter(Path.ChangeExtension(gm2Path, ".txt"));
 			var gbaCycleCount = 0UL;
+			var lastInput = default(EmuButtons);
+			gbiInputLog.WriteLine($"{0:X8} {(uint)lastInput:X4}");
 			while (true)
 			{
 				var movieInput = emuInputLog.GetNextInput();
@@ -228,6 +230,15 @@ internal static class InputLogPlayer
 					break;
 				}
 
+				var gbaInputState = movieInput.Value.GBAInputState;
+				if (gbaInputState != lastInput)
+				{
+					// convert to GBI input frequency (4KiHz)
+					var gbiCycleCount = gbaCycleCount / 4096;
+					gbiInputLog.WriteLine($"{gbiCycleCount:X8} {(uint)gbaInputState:X4}");
+					lastInput = gbaInputState;
+				}
+
 				var gbaCyclesRan = movieInput.Value.CpuCyclesRan;
 				if (emuInputLog.Platform is EmuInputLog.EmuPlatform.GBC_GBA)
 				{
@@ -236,10 +247,6 @@ internal static class InputLogPlayer
 				}
 
 				gbaCycleCount += gbaCyclesRan;
-
-				// convert to GBI input frequency (4KiHz)
-				var gbiCycleCount = gbaCycleCount / 4096;
-				gbiInputLog.WriteLine($"{gbiCycleCount:X8} {(uint)movieInput.Value.GBAInputState:X4}");
 			}
 
 			return 0;
