@@ -213,7 +213,7 @@ internal static class InputLogPlayer
 			}
 
 			using var gbiInputLog = new StreamWriter(Path.ChangeExtension(gm2Path, ".txt"));
-			var gbiCycleCount = 0UL;
+			var gbaCycleCount = 0UL;
 			while (true)
 			{
 				var movieInput = emuInputLog.GetNextInput();
@@ -228,14 +228,17 @@ internal static class InputLogPlayer
 					break;
 				}
 
-				var gbiCyclesRan = movieInput.Value.CpuCyclesRan;
+				var gbaCyclesRan = movieInput.Value.CpuCyclesRan;
 				if (emuInputLog.Platform is EmuInputLog.EmuPlatform.GBC_GBA)
 				{
 					// convert 2MiHz to 16MiHz
-					gbiCyclesRan *= 8;
+					gbaCyclesRan *= 8;
 				}
 
-				gbiCycleCount += gbiCyclesRan;
+				gbaCycleCount += gbaCyclesRan;
+
+				// convert to GBI input frequency (4KiHz)
+				var gbiCycleCount = gbaCycleCount / 4096;
 				gbiInputLog.WriteLine($"{gbiCycleCount:X8} {(uint)movieInput.Value.GBAInputState:X4}");
 			}
 
