@@ -214,8 +214,8 @@ internal static class InputLogPlayer
 
 			using var gbiInputLog = new StreamWriter(Path.ChangeExtension(gm2Path, ".txt"));
 			var gbaCycleCount = 0UL;
-			var lastInput = default(EmuButtons);
-			gbiInputLog.WriteLine($"{0:X8} {(uint)lastInput:X4}");
+			var lastGbiInput = 0U;
+			gbiInputLog.WriteLine($"{0:X8} {lastGbiInput:X4}");
 			while (true)
 			{
 				var movieInput = emuInputLog.GetNextInput();
@@ -230,13 +230,30 @@ internal static class InputLogPlayer
 					break;
 				}
 
-				var gbaInputState = movieInput.Value.GBAInputState;
-				if (gbaInputState != lastInput)
+				static uint ConvertToGBI(EmuInputLog.MovieInput movieInput)
+				{
+					var gbiInputs = movieInput.GBInputState;
+					// GBI inverts the order of L and R buttons
+					if ((movieInput.GBAInputState & EmuButtons.L) != 0)
+					{
+						gbiInputs |= EmuButtons.R;
+					}
+
+					if ((movieInput.GBAInputState & EmuButtons.R) != 0)
+					{
+						gbiInputs |= EmuButtons.L;
+					}
+
+					return (uint)gbiInputs;
+				}
+
+				var gbiInputState = ConvertToGBI(movieInput.Value);
+				if (gbiInputState != lastGbiInput)
 				{
 					// convert to GBI input frequency (4KiHz)
 					var gbiCycleCount = gbaCycleCount / 4096;
-					gbiInputLog.WriteLine($"{gbiCycleCount:X8} {(uint)gbaInputState:X4}");
-					lastInput = gbaInputState;
+					gbiInputLog.WriteLine($"{gbiCycleCount:X8} {gbiInputState:X4}");
+					lastGbiInput = gbiInputState;
 				}
 
 				var gbaCyclesRan = movieInput.Value.CpuCyclesRan;
@@ -247,6 +264,12 @@ internal static class InputLogPlayer
 				}
 
 				gbaCycleCount += gbaCyclesRan;
+			}
+
+			// final line must be a blank input to let the final input through
+			{
+				var gbiCycleCount = gbaCycleCount / 4096;
+				gbiInputLog.WriteLine($"{gbiCycleCount:X8} {0:X4}");
 			}
 
 			return 0;
